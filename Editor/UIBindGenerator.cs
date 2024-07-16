@@ -1,39 +1,95 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 using TMPro;
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace UIFramework
+namespace UIFramework.Editors
 {
     internal static class UIBindGenerator
     {
-        private static readonly Regex BindableRegex = new Regex(@"^([a-z]+)_(.+)");
+        public delegate void CodeWriter(string indent, TextWriter writer);
 
-        private const string BeginBindCode = "#region Auto Generate UI Bind";
-        private const string EndBindCode = "#endregion Auto Generate UI Bind";
+        private const char BindableTag = '@';
 
-        private static readonly Dictionary<string, IBindableCodeGenerator> CodeGenerators = new Dictionary<string, IBindableCodeGenerator>()
+        private const string BeginBindCodeTag = "#region Auto Generate UI Bind";
+        private const string EndBindCodeTag = "#endregion Auto Generate UI Bind";
+
+        private static readonly IBindableCodeGenerator[] CodeGenerators = new IBindableCodeGenerator[]
         {
-            {"btn", new BindButtonCodeGenerator() },
-            {"img", new BindComponentCodeGenerator<Image>() },
-            {"txt", new BindComponentCodeGenerator<TextMeshProUGUI>() },
-            {"ui", new BindUIElementCodeGenerator() },
-            {"node", new BindTransformCodeGenerator() },
-            {"obj", new BindGameObjectCodeGenerator() },
+            new BindButtonCodeGenerator(),
+            new BindComponentCodeGenerator<Image>(),
+            new BindComponentCodeGenerator<TextMeshProUGUI>(),
+            new BindUIWidgetCodeGenerator(),
+            new BindTransformCodeGenerator(),
+            new BindGameObjectCodeGenerator(),
         };
 
-        public static void ClearBindCode(MonoBehaviour target)
+        public static void GenerateBindCode(MonoBehaviour target)
         {
-            var filePath = GetMonoBehaviourFilePath(target);
+            var filePath = AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(target));
             ClearBindCode(filePath);
+
+            var bindables = GetAllBindableNodes(target.gameObject);
+            var targetType = target.GetType();
+
+            var currentIndent = "";
+            using var writer = new StringWriter(new StringBuilder(File.ReadAllText(filePath, Encoding.UTF8)));
+
+            BeginGenerateScope(writer, ref currentIndent, targetType);
+            {
+                for (var index = 0; index < bindables.Length; ++index)
+                {
+                    ref var node = ref bindables[index];
+                    writer.WriteLine($"{currentIndent}[UnityEngine.SerializeField]");
+                    CodeGenerators[node.BindableIndex].WriteFieldCode(writer, currentIndent, targetType, node);
+                }
+
+                writer.WriteLine();
+                writer.WriteLine($"{currentIndent}[UnityEngine.ContextMenu(\"Rebind Wdigets\"), System.Obsolete(\"Don't Call In Code.\", true)]");
+                writer.WriteLine($"{currentIndent}private void RebindAllWidgets()");
+                BeginScope(writer, ref currentIndent);
+                {
+                    writer.WriteLine("#if UNITY_EDITOR");
+                    writer.WriteLine($"{currentIndent}UnityEditor.Undo.RecordObject(this, \"Bind All Widgets\");");
+                    writer.WriteLine("#endif");
+                    writer.WriteLine();
+
+                    for (var index = 0; index < bindables.Length; ++index)
+                    {
+                        ref var node = ref bindables[index];
+                        CodeGenerators[node.BindableIndex].WriteBindCode(writer, currentIndent, targetType, node);
+                    }
+
+                    writer.WriteLine();
+                    writer.WriteLine("#if UNITY_EDITOR");
+                    writer.WriteLine($"{currentIndent}UnityEditor.EditorUtility.SetDirty(this);");
+                    writer.WriteLine("#endif");
+                }
+                EndScope(writer, ref currentIndent);
+
+                writer.WriteLine();
+                writer.WriteLine($"{currentIndent}[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+                writer.WriteLine($"{currentIndent}partial void InitializeAllWidgets()");
+                BeginScope(writer, ref currentIndent);
+                {
+                    for (var index = 0; index < bindables.Length; ++index)
+                    {
+                        ref var node = ref bindables[index];
+                        CodeGenerators[node.BindableIndex].WriteInitializeCode(writer, currentIndent, targetType, node);
+                    }
+                }
+                EndScope(writer, ref currentIndent);
+            }
+            EndGenerateScope(writer, ref currentIndent, targetType);
+
+            File.WriteAllText(filePath, writer.ToString(), Encoding.UTF8);
         }
 
-        public static void ClearBindCode(string filePath)
+        private static void ClearBindCode(string filePath)
         {
             var sb = new StringBuilder();
 
@@ -41,12 +97,12 @@ namespace UIFramework
             var inBindRegion = false;
             for (string line = reader.ReadLine(); line != null; line = reader.ReadLine())
             {
-                inBindRegion = inBindRegion || line.IndexOf(BeginBindCode) >= 0;
+                inBindRegion = inBindRegion || line.IndexOf(BeginBindCodeTag) >= 0;
                 if (!inBindRegion)
                 {
                     sb.AppendLine(line);
                 }
-                inBindRegion = inBindRegion || line.IndexOf(EndBindCode) >= 0;
+                inBindRegion = inBindRegion || line.IndexOf(EndBindCodeTag) >= 0;
             }
             reader.Close();
 
@@ -65,55 +121,43 @@ namespace UIFramework
             File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
         }
 
-        public static void GenerateBindCode(MonoBehaviour target)
+        private static void BeginScope(TextWriter writer, ref string indent)
         {
-            var filePath = AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(target));
-            ClearBindCode(filePath);
+            writer.WriteLine($"{indent}{{");
+            indent += '\t';
+        }
 
-            var bindables = GetAllBindableNodes(target.gameObject);
-            var targetType = target.GetType();
+        private static void EndScope(TextWriter writer, ref string indent)
+        {
+            indent = indent.Substring(0, indent.Length - 1);
+            writer.WriteLine($"{indent}}}");
+        }
 
-            using var writer = new StreamWriter(filePath, true, Encoding.UTF8);
-
+        private static void BeginGenerateScope(TextWriter writer, ref string indent, Type type)
+        {
             writer.WriteLine("");
-            writer.WriteLine(BeginBindCode);
-            writer.WriteLine("namespace " + targetType.Namespace);
-            writer.WriteLine("{");
-
-            writer.Write("\t");
-            writer.Write(targetType.IsPublic ? "public" : "internal");
-            writer.Write(" partial class ");
-            writer.Write(targetType.Name);
-            writer.Write(" : ");
-            writer.WriteLine(targetType.BaseType.FullName);
-            writer.WriteLine("\t{");
-
-            for(var index =  0; index < bindables.Length; ++index)
+            writer.WriteLine(BeginBindCodeTag);
+            writer.WriteLine("#pragma warning disable IDE0052, IDE0001");
+            if (!string.IsNullOrEmpty(type.Namespace))
             {
-                ref var node = ref bindables[index];
-                CodeGenerators[node.Tag].WriteFieldCode(writer, target, node, "\t\t");
+                writer.WriteLine("namespace " + type.Namespace);
+                BeginScope(writer, ref indent);
             }
 
-            writer.WriteLine();
-            writer.WriteLine("\t\t[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-            writer.WriteLine("\t\tprivate void BindAllWidgets()");
-            writer.WriteLine("\t\t{");
-            writer.WriteLine("\t\t\tvar transform = this.transform;");
+            writer.WriteLine($"{indent}partial class {type.Name}");
+            BeginScope(writer, ref indent);
+        }
 
-            for (var index = 0; index < bindables.Length; ++index)
+        private static void EndGenerateScope(TextWriter writer, ref string indent, Type type)
+        {
+            EndScope(writer, ref indent);
+            if (!string.IsNullOrEmpty(type.Namespace))
             {
-                writer.WriteLine();
-                ref var node = ref bindables[index];
-                CodeGenerators[node.Tag].WriteBindCode(writer, target, node, "\t\t\t");
+                EndScope(writer, ref indent);
             }
 
-            writer.WriteLine("\t\t}");
-
-            writer.WriteLine("\t}");
-            writer.WriteLine("}");
-            writer.Write(EndBindCode);
-
-            writer.Close();
+            writer.WriteLine("#pragma warning restore IDE0052, IDE0001");
+            writer.WriteLine(EndBindCodeTag);
         }
 
         private static BindableNode[] GetAllBindableNodes(GameObject target)
@@ -130,8 +174,7 @@ namespace UIFramework
                     stack.Push(transform.GetChild(index));
                 }
 
-                var tag = GetBindableTag(transform.name) ?? string.Empty;
-                if (CodeGenerators.TryGetValue(tag, out var generator) && generator.IsCanBind(transform.gameObject))
+                if (transform.name.StartsWith(BindableTag))
                 {
                     bindableGameObjects.Add(transform.gameObject);
                 }
@@ -143,11 +186,11 @@ namespace UIFramework
                 var gameObject = bindableGameObjects[index];
                 bindableNodes[index] = new BindableNode()
                 {
-                    Tag = GetBindableTag(gameObject.name),
                     Target = gameObject,
-                    FieldName = GetBindableFieldName(gameObject.name),
-                    NodeName = GetBindableNodeName(gameObject.name),
-                    NodePath = AnimationUtility.CalculateTransformPath(gameObject.transform, target.transform)
+                    FieldName = "m_" + gameObject.name[1..],
+                    NodeName = gameObject.name[1..],
+                    NodePath = AnimationUtility.CalculateTransformPath(gameObject.transform, target.transform),
+                    BindableIndex = GetBindableIndex(gameObject)
                 };
             }
             return bindableNodes;
@@ -158,24 +201,16 @@ namespace UIFramework
             return AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(target));
         }
 
-        private static string GetBindableTag(string name)
+        private static int GetBindableIndex(GameObject target)
         {
-            var result = BindableRegex.Match(name);
-            return result.Success ? result.Groups[1].Value : string.Empty;
-        }
-
-        private static string GetBindableNodeName(string name)
-        {
-            var result = BindableRegex.Match(name);
-            name = result.Success ? result.Groups[2].Value : name;
-            return char.ToUpper(name[0]) + name[1..];
-        }
-
-        private static string GetBindableFieldName(string name)
-        {
-            var result = BindableRegex.Match(name);
-            name = result.Success ? result.Groups[2].Value : name;
-            return "m_" + char.ToLower(name[0]) + name[1..];
+            for (var index = 0; index < CodeGenerators.Length; ++index)
+            {
+                if (CodeGenerators[index].IsCanBind(target))
+                {
+                    return index;
+                }
+            }
+            return -1;
         }
     }
 }

@@ -1,0 +1,13 @@
+using UIFramework;
+
+#ROOTNAMESPACEBEGIN#
+public partial class #SCRIPTNAME# : Widget
+{
+    partial void InitializeAllWidgets();
+
+    private void Awake()
+    {
+        InitializeAllWidgets();
+    }
+}
+#ROOTNAMESPACEEND#

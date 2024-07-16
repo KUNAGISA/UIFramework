@@ -1,0 +1,39 @@
+using UIFramework;
+
+#ROOTNAMESPACEBEGIN#
+public partial class #SCRIPTNAME# : View<#SCRIPTNAME#.Data>
+{
+    public class Data : ViewData<#SCRIPTNAME#>
+    {
+        public override string ViewPath => throw new System.NotImplementedException();
+    }
+
+    partial void InitializeAllWidgets();
+
+    protected override void Awake()
+    {
+        base.Awake();
+        InitializeAllWidgets();
+    }
+
+    protected override void OnOpen(Data data)
+    {
+        base.OnOpen(data);
+    }
+
+    protected override void OnClose()
+    {
+        base.OnClose();
+    }
+
+    protected override void OnPause()
+    {
+        base.OnPause();
+    }
+
+    protected override void OnResume()
+    {
+        base.OnResume();
+    }
+}
+#ROOTNAMESPACEEND#

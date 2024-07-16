@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using UnityEngine;
 
 namespace UIFramework
@@ -10,24 +11,19 @@ namespace UIFramework
             return true;
         }
 
-        public void WriteFieldCode(StreamWriter writer, MonoBehaviour target, in BindableNode bindable, string indent)
+        public void WriteFieldCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
         {
-            writer.Write(indent);
-            writer.Write("private ");
-            writer.Write(typeof(GameObject).FullName);
-            writer.Write(' ');
-            writer.Write(bindable.FieldName);
-            writer.WriteLine(" = null;");
+            writer.WriteLine($"{indent}private {typeof(GameObject).FullName} {bindable.FieldName} = null;");
         }
 
-        public void WriteBindCode(StreamWriter writer, MonoBehaviour target, in BindableNode bindable, string indent)
+        public void WriteBindCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
         {
-            writer.Write(indent);
-            writer.Write(bindable.FieldName);
-            writer.Write(" = ");
-            writer.Write("transform.Find(\"");
-            writer.Write(bindable.NodePath);
-            writer.WriteLine("\").gameObject;");
+            writer.WriteLine($"{indent}{bindable.FieldName} = transform.Find(\"{bindable.NodePath}\").gameObject;");
+        }
+
+        public void WriteInitializeCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
+        {
+
         }
     }
 }

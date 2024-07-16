@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using UnityEngine;
 
 namespace UIFramework
@@ -10,26 +11,19 @@ namespace UIFramework
             return target.TryGetComponent<T>(out var _);
         }
 
-        public virtual void WriteFieldCode(StreamWriter writer, MonoBehaviour target, in BindableNode bindable, string indent)
+        public void WriteFieldCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
         {
-            writer.Write(indent);
-            writer.Write("private ");
-            writer.Write(typeof(T).FullName);
-            writer.Write(' ');
-            writer.Write(bindable.FieldName);
-            writer.WriteLine(" = null;");
+            writer.WriteLine($"{indent}private {typeof(T).FullName} {bindable.FieldName} = null;");
         }
 
-        public virtual void WriteBindCode(StreamWriter writer, MonoBehaviour target, in BindableNode bindable, string indent)
+        public void WriteBindCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
         {
-            writer.Write(indent);
-            writer.Write(bindable.FieldName);
-            writer.Write(" = ");
-            writer.Write("transform.Find(\"");
-            writer.Write(bindable.NodePath);
-            writer.Write("\").GetComponent<");
-            writer.Write(typeof(T).FullName);
-            writer.WriteLine(">();");
+            writer.WriteLine($"{indent}{bindable.FieldName} = transform.Find(\"{bindable.NodePath}\").GetComponent<{typeof(T).FullName}>();");
+        }
+
+        public virtual void WriteInitializeCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
+        {
+
         }
     }
 }

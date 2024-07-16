@@ -1,30 +1,24 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Reflection;
-using UnityEngine;
 using UnityEngine.UI;
 
 namespace UIFramework
 {
     internal class BindButtonCodeGenerator : BindComponentCodeGenerator<Button>
     {
-        public override void WriteBindCode(StreamWriter writer, MonoBehaviour target, in BindableNode bindable, string indent)
+        public override void WriteInitializeCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
         {
-            base.WriteBindCode(writer, target, bindable, indent);
+            base.WriteInitializeCode(writer, indent, type, bindable);
 
-            var bindMethodName = $"On{bindable.NodeName}Click";
-            if (target.GetType().GetMethod(bindMethodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) != null)
+            var method = type.GetMethod($"On{bindable.NodeName}Click", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (method != null)
             {
-                writer.Write(indent);
-                writer.Write(bindable.FieldName);
-                writer.Write(".onClick.AddListener(");
-                writer.Write(bindMethodName);
-                writer.WriteLine(");");
+                writer.WriteLine($"{indent}{bindable.FieldName}.onClick.AddListener({method.Name});");
             }
-            else if (bindable.NodeName == "Close" && target.GetType().GetMethod("CloseSelf", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) != null)
+            else if (bindable.NodeName == "Close" && type.GetMethod("CloseSelf", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) != null)
             {
-                writer.Write(indent);
-                writer.Write(bindable.FieldName);
-                writer.WriteLine(".onClick.AddListener(CloseSelf);");
+                writer.WriteLine($"{indent}{bindable.FieldName}.onClick.AddListener(CloseSelf);");
             }
         }
     }
