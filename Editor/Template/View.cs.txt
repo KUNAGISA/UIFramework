@@ -8,14 +8,6 @@ public partial class #SCRIPTNAME# : View<#SCRIPTNAME#.Data>
         public override string ViewPath => throw new System.NotImplementedException();
     }
 
-    partial void InitializeAllWidgets();
-
-    protected override void Awake()
-    {
-        base.Awake();
-        InitializeAllWidgets();
-    }
-
     protected override void OnOpen(Data data)
     {
         base.OnOpen(data);
@@ -34,6 +26,25 @@ public partial class #SCRIPTNAME# : View<#SCRIPTNAME#.Data>
     protected override void OnResume()
     {
         base.OnResume();
+    }
+}
+#ROOTNAMESPACEEND#
+
+#ROOTNAMESPACEBEGIN#
+partial class #SCRIPTNAME#
+{
+    protected override void Awake()
+    {
+        base.Awake();
+        InitializeAllWidgets();
+        OnAwake();
+    }
+
+    partial void OnAwake();
+
+    private void InitializeAllWidgets()
+    {
+
     }
 }
 #ROOTNAMESPACEEND#

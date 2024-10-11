@@ -25,5 +25,10 @@ namespace UIFramework
         {
 
         }
+
+        public virtual void WriteMethodCode(TextWriter writer, string indent, Type type, in BindableNode bindable)
+        {
+
+        }
     }
 }

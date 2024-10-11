@@ -44,6 +44,13 @@ namespace UIFramework.Editors
                 for (var index = 0; index < bindables.Length; ++index)
                 {
                     ref var node = ref bindables[index];
+                    CodeGenerators[node.BindableIndex].WriteMethodCode(writer, currentIndent, targetType, node);
+                }
+
+                writer.WriteLine();
+                for (var index = 0; index < bindables.Length; ++index)
+                {
+                    ref var node = ref bindables[index];
                     writer.WriteLine($"{currentIndent}[UnityEngine.SerializeField]");
                     CodeGenerators[node.BindableIndex].WriteFieldCode(writer, currentIndent, targetType, node);
                 }
@@ -73,7 +80,7 @@ namespace UIFramework.Editors
 
                 writer.WriteLine();
                 writer.WriteLine($"{currentIndent}[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-                writer.WriteLine($"{currentIndent}partial void InitializeAllWidgets()");
+                writer.WriteLine($"{currentIndent}private void InitializeAllWidgets()");
                 BeginScope(writer, ref currentIndent);
                 {
                     for (var index = 0; index < bindables.Length; ++index)
@@ -146,6 +153,18 @@ namespace UIFramework.Editors
 
             writer.WriteLine($"{indent}partial class {type.Name}");
             BeginScope(writer, ref indent);
+
+            writer.WriteLine($"{indent}protected override void Awake()");
+            BeginScope(writer, ref indent);
+            {
+                writer.WriteLine($"{indent}base.Awake();");
+                writer.WriteLine($"{indent}InitializeAllWidgets();");
+                writer.WriteLine($"{indent}OnAwake();");
+            }
+            EndScope(writer, ref indent);
+
+            writer.WriteLine();
+            writer.WriteLine($"{indent}partial void OnAwake();");
         }
 
         private static void EndGenerateScope(TextWriter writer, ref string indent, Type type)
@@ -171,7 +190,11 @@ namespace UIFramework.Editors
             {
                 for (var index = 0; index < transform.childCount; ++index)
                 {
-                    stack.Push(transform.GetChild(index));
+                    var child = transform.GetChild(index);
+                    if (!PrefabUtility.IsAnyPrefabInstanceRoot(child.gameObject) || child.TryGetComponent<PrefabDepthCodeGenerate>(out _))
+                    {
+                        stack.Push(transform.GetChild(index));
+                    }
                 }
 
                 if (transform.name.StartsWith(BindableTag))
@@ -194,11 +217,6 @@ namespace UIFramework.Editors
                 };
             }
             return bindableNodes;
-        }
-
-        private static string GetMonoBehaviourFilePath(MonoBehaviour target)
-        {
-            return AssetDatabase.GetAssetPath(MonoScript.FromMonoBehaviour(target));
         }
 
         private static int GetBindableIndex(GameObject target)

@@ -3,11 +3,25 @@ using UIFramework;
 #ROOTNAMESPACEBEGIN#
 public partial class #SCRIPTNAME# : Widget
 {
-    partial void InitializeAllWidgets();
+    
+}
+#ROOTNAMESPACEEND#
 
-    private void Awake()
+#ROOTNAMESPACEBEGIN#
+partial class #SCRIPTNAME#
+{
+    protected override void Awake()
     {
+        base.Awake();
         InitializeAllWidgets();
+        OnAwake();
+    }
+
+    partial void OnAwake();
+
+    private void InitializeAllWidgets()
+    {
+
     }
 }
 #ROOTNAMESPACEEND#
