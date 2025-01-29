@@ -1,0 +1,10 @@
+{
+  "name": "com.kunagisatomo.uiframework",
+  "displayName": "UI Framework",
+  "description": "Simple UI Framework",
+  "version": "1.0.0",
+  "author": {
+    "name": "\u96f6",
+    "email": "kunagisatomo@live.com"
+  }
+}
